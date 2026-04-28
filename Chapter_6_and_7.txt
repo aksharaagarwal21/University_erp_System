@@ -1,0 +1,778 @@
+================================================================================
+                           CHAPTER 6
+         FRONT-END AND BACK-END CODE OF UNIVERSITY ERP SYSTEM
+================================================================================
+
+
+6.1 Technology Stack
+--------------------
+
+The University ERP System is implemented as a full-stack web application using
+the following technologies:
+
+Component          | Technology              | Purpose
+-------------------|-------------------------|------------------------------------------
+Front-End          | React.js (Vite)         | User interface and interactive dashboards
+Back-End           | Node.js + Express.js    | REST API server and business logic
+Database           | MySQL 8.0               | Relational database management
+Charting Library   | Recharts                | Data visualization (Bar, Pie, Radial charts)
+Routing            | React Router DOM        | Client-side navigation
+Icons              | Lucide React            | SVG icon library
+HTTP Client        | Fetch API               | API communication
+Styling            | Vanilla CSS             | Custom design system
+
+Table 6.1: Technology Stack Used
+
+
+6.2 Database Connectivity (Back-End Server)
+-------------------------------------------
+
+The back-end server connects to MySQL using the mysql2/promise library with a
+connection pool for efficient database access.
+
+File: backend/server.js
+
+// ---- Database Connection Setup ----
+const express = require('express');
+const cors = require('cors');
+const mysql = require('mysql2/promise');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// MySQL Connection Pool
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: '****',
+  database: 'university_erpsystem',
+  waitForConnections: true,
+  connectionLimit: 10
+});
+
+pool.getConnection()
+  .then(c => { console.log('MySQL Connected'); c.release(); })
+  .catch(e => console.error('MySQL Error:', e.message));
+
+Explanation:
+- A connection pool with 10 max connections is created to handle concurrent
+  requests efficiently.
+- The pool.getConnection() method verifies the connection on server startup.
+- All subsequent queries use pool.query() which automatically acquires and
+  releases connections from the pool.
+
+
+6.3 Authentication Module
+-------------------------
+
+The system implements role-based authentication with three user types:
+Student, Faculty, and Super Admin.
+
+// ---- Users Table (SQL) ----
+CREATE TABLE Users (
+    UserID INT AUTO_INCREMENT PRIMARY KEY,
+    Username VARCHAR(50) UNIQUE NOT NULL,
+    Password VARCHAR(255) NOT NULL,
+    Role ENUM('student', 'faculty', 'admin') NOT NULL,
+    RefID INT DEFAULT NULL,
+    FullName VARCHAR(100) NOT NULL,
+    Email VARCHAR(100),
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+// ---- Login API Endpoint ----
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password, role } = req.body;
+    const [users] = await pool.query(
+      'SELECT * FROM Users WHERE Username=? AND Password=? AND Role=?',
+      [username, password, role]
+    );
+    if (users.length === 0)
+      return res.status(401).json({ error: 'Invalid credentials' });
+    const user = users[0];
+    res.json({
+      UserID: user.UserID,
+      Username: user.Username,
+      Role: user.Role,
+      RefID: user.RefID,
+      FullName: user.FullName
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- Registration API Endpoint ----
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { Username, Password, Role, RefID, FullName, Email } = req.body;
+    await pool.query(
+      'INSERT INTO Users (Username,Password,Role,RefID,FullName,Email) VALUES (?,?,?,?,?,?)',
+      [Username, Password, Role, RefID || null, FullName, Email]
+    );
+    res.json({ message: 'Registration successful' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+Table 6.2: Default User Credentials
+
+Role        | Username  | Password   | RefID
+------------|-----------|------------|------
+Admin       | admin     | admin123   | NULL
+Student     | rahul     | rahul123   | 101
+Student     | priya     | priya123   | 102
+Student     | aman      | aman123    | 103
+Student     | sneha     | sneha123   | 104
+Faculty     | drsingh   | singh123   | 201
+Faculty     | drverma   | verma123   | 202
+Faculty     | driyer    | iyer123    | 203
+
+
+6.4 CRUD API Implementation
+----------------------------
+
+A generic CRUD helper function is used to generate REST endpoints for all
+9 database tables, reducing code duplication:
+
+function crud(endpoint, table, idField) {
+  // GET all records
+  app.get(`/api/${endpoint}`, async (req, res) => {
+    const [r] = await pool.query(`SELECT * FROM ${table} ORDER BY ${idField}`);
+    res.json(r);
+  });
+
+  // POST - Create new record
+  app.post(`/api/${endpoint}`, async (req, res) => {
+    const keys = Object.keys(req.body);
+    const vals = Object.values(req.body);
+    await pool.query(
+      `INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,
+      vals
+    );
+    res.json({ message: `${table} added successfully` });
+  });
+
+  // PUT - Update record
+  app.put(`/api/${endpoint}/:id`, async (req, res) => {
+    const sets = Object.keys(req.body).filter(k => k !== idField)
+                       .map(k => `${k}=?`).join(',');
+    const vals = Object.keys(req.body).filter(k => k !== idField)
+                       .map(k => req.body[k]);
+    await pool.query(`UPDATE ${table} SET ${sets} WHERE ${idField}=?`,
+                     [...vals, req.params.id]);
+    res.json({ message: `${table} updated successfully` });
+  });
+
+  // DELETE - Remove record
+  app.delete(`/api/${endpoint}/:id`, async (req, res) => {
+    await pool.query(`DELETE FROM ${table} WHERE ${idField}=?`, [req.params.id]);
+    res.json({ message: `${table} deleted` });
+  });
+}
+
+// Register CRUD for all tables
+crud('departments', 'Department', 'DeptID');
+crud('students',    'Student',    'StudentID');
+crud('faculty',     'Faculty',    'FacultyID');
+crud('courses',     'Course',     'CourseID');
+crud('subjects',    'Subject',    'SubjectID');
+crud('enrollments', 'Enrollment', 'EnrollID');
+crud('timetable',   'Timetable',  'TTID');
+crud('exams',       'Exam',       'ExamID');
+crud('results',     'Result',     'ResultID');
+
+Table 6.3: REST API Endpoints Summary
+
+Method | Endpoint              | Description
+-------|-----------------------|-----------------------------
+GET    | /api/students         | Fetch all students with dept
+GET    | /api/faculty          | Fetch all faculty with dept
+POST   | /api/students         | Add a new student
+PUT    | /api/students/:id     | Update student by ID
+DELETE | /api/students/:id     | Delete student by ID
+GET    | /api/dashboard/stats  | Get all counts for dashboard
+GET    | /api/student/:id/results    | Student-specific results
+GET    | /api/faculty-user/:id/students | Faculty's student list
+POST   | /api/auth/login       | User authentication
+POST   | /api/auth/register    | New user registration
+POST   | /api/query            | Execute SELECT SQL queries
+GET    | /api/views/student-results  | Student Result View data
+GET    | /api/reports/grade-distribution | Grade distribution
+
+
+6.5 Student-Specific API Endpoints
+------------------------------------
+
+These endpoints return data filtered by a specific student's ID, used by the
+Student Dashboard:
+
+// Student Profile with Department Name
+app.get('/api/student/:id/profile', async (req, res) => {
+  const [r] = await pool.query(
+    'SELECT s.*, d.DeptName FROM Student s ' +
+    'LEFT JOIN Department d ON s.DeptID = d.DeptID ' +
+    'WHERE s.StudentID = ?', [req.params.id]
+  );
+  res.json(r[0] || {});
+});
+
+// Student's Enrolled Subjects
+app.get('/api/student/:id/enrollments', async (req, res) => {
+  const [r] = await pool.query(
+    'SELECT e.*, sub.SubjectName, sub.Credits ' +
+    'FROM Enrollment e JOIN Subject sub ON e.SubjectID = sub.SubjectID ' +
+    'WHERE e.StudentID = ?', [req.params.id]
+  );
+  res.json(r);
+});
+
+// Student's Exam Results
+app.get('/api/student/:id/results', async (req, res) => {
+  const [r] = await pool.query(
+    'SELECT r.*, e.ExamDate, sub.SubjectName FROM Result r ' +
+    'JOIN Exam e ON r.ExamID = e.ExamID ' +
+    'JOIN Subject sub ON e.SubjectID = sub.SubjectID ' +
+    'WHERE r.StudentID = ?', [req.params.id]
+  );
+  res.json(r);
+});
+
+// Student's Timetable
+app.get('/api/student/:id/timetable', async (req, res) => {
+  const [r] = await pool.query(
+    'SELECT t.Day, t.TimeSlot, t.RoomNo, f.FacultyName, sub.SubjectName ' +
+    'FROM Enrollment en JOIN Subject sub ON en.SubjectID = sub.SubjectID ' +
+    'JOIN Timetable t ON sub.SubjectID = t.SubjectID ' +
+    'JOIN Faculty f ON t.FacultyID = f.FacultyID ' +
+    'WHERE en.StudentID = ? ' +
+    "ORDER BY FIELD(t.Day,'Monday','Tuesday','Wednesday','Thursday','Friday'), t.TimeSlot",
+    [req.params.id]
+  );
+  res.json(r);
+});
+
+
+6.6 SQL Console API
+--------------------
+
+The system includes a safe SQL query executor that allows only SELECT
+statements for educational and demonstration purposes:
+
+app.post('/api/query', async (req, res) => {
+  try {
+    const { sql } = req.body;
+    if (!sql.trim().toUpperCase().startsWith('SELECT'))
+      return res.status(403).json({ error: 'Only SELECT queries allowed' });
+    const [rows] = await pool.query(sql);
+    res.json({
+      columns: rows.length > 0 ? Object.keys(rows[0]) : [],
+      data: rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+6.7 Front-End Module Codes
+---------------------------
+
+6.7.1 Application Entry Point (App.jsx)
+
+The main App component handles authentication state, role-based routing,
+and the sidebar navigation:
+
+function App() {
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('erp_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    localStorage.setItem('erp_user', JSON.stringify(userData));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('erp_user');
+  };
+
+  // If not logged in, show login page
+  if (!user) return <LoginPage onLogin={handleLogin} />;
+
+  // Role-based dashboard routing
+  return (
+    <BrowserRouter>
+      <div className="app-layout">
+        <Sidebar user={user} onLogout={handleLogout} />
+        <main className="main-content">
+          {user.Role === 'student' && <StudentDashboard user={user} />}
+          {user.Role === 'faculty' && <FacultyDashboard user={user} />}
+          {user.Role === 'admin' && (
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/students" element={<Students />} />
+              <Route path="/faculty" element={<Faculty />} />
+              {/* ... other admin routes ... */}
+            </Routes>
+          )}
+        </main>
+      </div>
+    </BrowserRouter>
+  );
+}
+
+6.7.2 Login Page Component (LoginPage.jsx)
+
+The login page supports three roles and includes a registration flow:
+
+- Role selector buttons (Student, Faculty, Super Admin)
+- Username and password fields with show/hide toggle
+- Form validation and error display
+- "Register here" link to switch to registration mode
+- Registration form with Full Name, Email, Role ID, Username, Password
+- Demo credentials displayed for quick testing
+
+6.7.3 Student Dashboard (StudentDashboard.jsx)
+
+Features:
+- Overview tab with 4 stat cards (Subjects, Results, Classes, GPA)
+- Bar chart showing subject-wise marks (using Recharts)
+- Radial GPA gauge with grade distribution badges
+- My Subjects tab with colored subject cards showing credits and status
+- My Results tab with result cards, progress bars, and color-coded marks
+- My Timetable tab with visual day-cards organized by weekday
+
+6.7.4 Faculty Dashboard (FacultyDashboard.jsx)
+
+Features:
+- Overview tab with stat cards (Subjects Teaching, Students, Schedule)
+- My Subjects tab listing subjects with credits and semester
+- My Students tab showing enrolled students per subject
+- My Schedule tab with teaching timetable
+- Manage Marks tab with:
+  * Add New Result modal (Student dropdown, Exam dropdown, Marks input)
+  * Auto-grade calculation (A+: 90-100, A: 80-89, B: 70-79, C: 60-69, F: <60)
+  * Auto-GPA calculation (Marks / 10)
+  * Inline editing of existing marks
+  * Delete result functionality
+  * Grading scale legend
+
+6.7.5 Admin Dashboard (Dashboard.jsx)
+
+Features:
+- 8 stat cards (Students, Faculty, Departments, Courses, etc.)
+- Color-coded enrollment distribution bar chart
+- Grade distribution donut/pie chart
+- Department performance progress bars with GPA
+- Faculty-per-department horizontal bar chart
+- Top performers table with gold/silver/bronze ranking badges
+
+6.7.6 CRUD Management Pages
+
+The admin panel includes full CRUD pages for all 9 tables:
+- Departments, Students, Faculty, Courses, Subjects
+- Enrollments, Timetable, Exams, Results
+
+Each page uses a reusable CrudPage component providing:
+- Data table with search and filtering
+- Add modal with form validation
+- Edit modal with pre-filled data
+- Delete with confirmation dialog
+- Foreign key dropdowns (e.g., Department selector in Student form)
+
+6.7.7 Reports & Analytics Page (Reports.jsx)
+
+- Subject-wise Enrollment bar chart
+- Grade Distribution pie chart
+- Faculty per Department bar chart
+- Department Summary table from Dept_Summary_View
+- Student Result View data (from Student_Result_View)
+- Timetable View data (from Timetable_View)
+- Enrollment Audit Log (from Enrollment_Log trigger table)
+
+6.7.8 SQL Console Page (SqlConsole.jsx)
+
+- Interactive SQL editor with syntax-friendly monospace font
+- 15+ pre-built sample queries covering all Chapter 3 operations:
+  * Aggregate functions (AVG, MAX, COUNT)
+  * HAVING clause queries
+  * UNION, INTERSECT set operations
+  * Subqueries
+  * INNER JOIN, LEFT JOIN
+  * Database Views
+  * Audit Logs
+- Ctrl+Enter keyboard shortcut to execute
+- Formatted results table with row count
+- Execution time display
+- Error handling with descriptive messages
+
+
+6.8 Project File Structure
+---------------------------
+
+c:\dbms_project\
+|
+|-- database\
+|   |-- 01_create_database.sql      (DDL - Create database & 9 tables + DML inserts)
+|   |-- 02_constraints_aggregates.sql (Constraints, Aggregates, Sets, Joins)
+|   |-- 03_views_triggers_cursors.sql (Views, Triggers, Cursors)
+|   |-- 04_transactions_concurrency.sql (Transactions & Concurrency Control)
+|   |-- 05_auth_users.sql           (Users table for authentication)
+|
+|-- backend\
+|   |-- package.json                (Dependencies: express, cors, mysql2)
+|   |-- server.js                   (Express API server - 240 lines)
+|
+|-- frontend\
+|   |-- index.html                  (Entry HTML with SEO meta tags)
+|   |-- package.json                (Dependencies: react, recharts, lucide, router)
+|   |-- src\
+|       |-- main.jsx                (React entry point)
+|       |-- App.jsx                 (Main app with auth & routing)
+|       |-- index.css               (Complete design system - 1500+ lines)
+|       |-- components\
+|       |   |-- CrudPage.jsx        (Reusable CRUD table/form component)
+|       |-- pages\
+|           |-- LoginPage.jsx       (Login + Registration)
+|           |-- Dashboard.jsx       (Admin Dashboard with charts)
+|           |-- StudentDashboard.jsx (Student portal)
+|           |-- FacultyDashboard.jsx (Faculty portal with marks mgmt)
+|           |-- Students.jsx        (Student CRUD)
+|           |-- Faculty.jsx         (Faculty CRUD)
+|           |-- Departments.jsx     (Department CRUD)
+|           |-- Courses.jsx         (Course CRUD)
+|           |-- Subjects.jsx        (Subject CRUD)
+|           |-- Enrollments.jsx     (Enrollment CRUD)
+|           |-- Timetable.jsx       (Timetable CRUD)
+|           |-- Exams.jsx           (Exam CRUD)
+|           |-- Results.jsx         (Result CRUD)
+|           |-- Reports.jsx         (Analytics & Views)
+|           |-- SqlConsole.jsx      (Interactive SQL executor)
+
+
+================================================================================
+                           CHAPTER 7
+                    RESULTS AND DISCUSSIONS
+================================================================================
+
+
+7.1 Screenshots of Front-End
+-----------------------------
+
+7.1.1 Login Page
+
+The login page features a split-screen layout with:
+- Left panel: University branding, feature highlights, and institutional credits
+- Right panel: Role selector (Student/Faculty/Admin), username/password fields,
+  and demo credentials for quick access
+- Smooth slide-up animation on page load
+- Role-specific gradient colors (Indigo for Student, Green for Faculty,
+  Orange for Admin)
+
+[Screenshot: Login page showing role selector with Student selected,
+ username and password fields, and demo credentials at the bottom]
+
+
+7.1.2 Registration Page
+
+The registration page allows new users to create accounts:
+- Accessible via "Register here" link on the login page
+- Role selector limited to Student and Faculty (Admin cannot self-register)
+- Fields: Full Name, Email, Reference ID, Username, Password
+- Success message redirects to login after 2 seconds
+- Back arrow to return to login
+
+[Screenshot: Registration form with Faculty role selected,
+ showing all input fields and the Register button]
+
+
+7.1.3 Student Dashboard - Overview
+
+After a student logs in, they see their personalized dashboard:
+- Welcome message with student name, ID, department, and semester
+- 4 stat cards: Enrolled Subjects (with total credits), Exam Results
+  (with highest marks), Classes/Week, and Average GPA
+- Subject-wise marks bar chart with individual colors per subject
+- Radial GPA gauge showing current GPA out of 10
+- Grade distribution badges (A+, A, B, C, F counts)
+
+[Screenshot: Student dashboard showing stat cards, bar chart
+ for marks, and radial GPA gauge]
+
+
+7.1.4 Student Dashboard - My Subjects
+
+- Subject enrollment displayed as interactive cards
+- Each card shows: Subject name, credit count, academic year, and status
+- Color-coded top border per subject
+- Status badges: Active (green), Completed (blue), Inactive (yellow)
+
+[Screenshot: Grid of subject cards with colored headers and status badges]
+
+
+7.1.5 Student Dashboard - My Results
+
+- Result entries displayed as horizontal cards
+- Each card shows: Grade badge (circular, color-coded), Subject name,
+  Exam date, Marks with "/100", GPA value
+- Inline progress bar showing marks percentage
+- Color-coded: Green (80+), Blue (60-79), Red (<60)
+
+[Screenshot: List of result cards with grade badges and progress bars]
+
+
+7.1.6 Student Dashboard - My Timetable
+
+- Visual timetable organized by day of the week
+- Each day is a card with colored header (Monday=Indigo, Tuesday=Green, etc.)
+- Time slots listed under each day with subject, faculty name, and room number
+
+[Screenshot: Timetable day-cards showing Monday through Friday schedule]
+
+
+7.1.7 Faculty Dashboard - Overview
+
+- Welcome message with faculty name, ID, department, and specialization
+- 4 stat cards: Subjects Teaching, Students Under Me, Classes/Week,
+  Results Published
+- Profile information grid showing Faculty ID, Name, Specialization, Department
+
+[Screenshot: Faculty dashboard overview with stat cards and profile]
+
+
+7.1.8 Faculty Dashboard - Manage Marks
+
+- Table showing all results for the faculty's subjects
+- Each row: Result ID, Student Name, Subject, Exam Date, Marks, Grade, GPA
+- Inline edit button to modify marks (auto-calculates grade and GPA)
+- Delete button to remove result entries
+- "Add New Result" button opens a modal with:
+  * Student dropdown (filtered to faculty's students)
+  * Exam dropdown (filtered to faculty's subjects)
+  * Marks input field
+  * Auto-calculated Grade and GPA preview
+- Grading scale legend displayed at the bottom
+
+[Screenshot: Marks management table with edit/delete buttons
+ and the Add New Result modal open]
+
+
+7.1.9 Admin Dashboard
+
+- 8 metric cards covering all university statistics
+- Enrollment Distribution bar chart (color-coded per subject)
+- Grade Distribution donut chart with legend
+- Department Performance section with progress bars and GPA values
+- Faculty per Department horizontal bar chart
+- Top Performers table with gold/silver/bronze rank badges
+  and inline performance bars
+
+[Screenshot: Admin dashboard showing all 8 stat cards,
+ enrollment chart, and grade distribution pie chart]
+
+
+7.1.10 Admin - CRUD Management (Students Page Example)
+
+- Data table with all student records
+- Search bar for filtering
+- "Add Student" button
+- Each row has Edit (pencil) and Delete (trash) action buttons
+- Modal form for adding/editing with department dropdown
+
+[Screenshot: Students management table with search bar
+ and the Add Student modal form open]
+
+
+7.1.11 Admin - Reports & Analytics
+
+- Subject-wise Enrollment bar chart
+- Grade Distribution pie chart
+- Faculty per Department bar chart
+- Department Summary table (from Dept_Summary_View)
+- Student Result View table (from Student_Result_View database view)
+- Timetable View table (from Timetable_View database view)
+- Enrollment Audit Log table (from trigger-based Enrollment_Log)
+
+[Screenshot: Reports page showing enrollment chart, grade distribution,
+ and database view tables]
+
+
+7.1.12 Admin - SQL Console
+
+- Interactive SQL editor with monospace font
+- 15+ pre-built sample query buttons (click to load)
+- Execute button and Ctrl+Enter shortcut
+- Results table with column headers, row numbers, and row count
+- Execution time displayed in milliseconds
+- Error messages for invalid queries
+
+[Screenshot: SQL Console with a query loaded, showing the results
+ table with student data]
+
+
+7.2 Screenshots of Database
+----------------------------
+
+7.2.1 Database Tables
+
+The university_erpsystem database contains 10 tables (9 core + 1 auth):
+
+mysql> SHOW TABLES;
++----------------------------------+
+| Tables_in_university_erpsystem   |
++----------------------------------+
+| Course                           |
+| Department                       |
+| Enrollment                       |
+| Enrollment_Log                   |
+| Exam                             |
+| Faculty                          |
+| Result                           |
+| Student                          |
+| Subject                          |
+| Timetable                        |
+| Users                            |
++----------------------------------+
+11 rows in set
+
+
+7.2.2 Student Table Data
+
+mysql> SELECT * FROM Student;
++-----------+-------+------------------+--------------+----------+--------+
+| StudentID | Name  | Email            | Phone        | Semester | DeptID |
++-----------+-------+------------------+--------------+----------+--------+
+| 101       | Rahul | rahul@gmail.com  | 9001112222   | 3        | 1      |
+| 102       | Priya | priya@gmail.com  | 9003334444   | 2        | 1      |
+| 103       | Aman  | aman@gmail.com   | 9112223333   | 4        | 2      |
+| 104       | Sneha | sneha@gmail.com  | 9223334444   | 3        | 2      |
++-----------+-------+------------------+--------------+----------+--------+
+4 rows in set
+
+
+7.2.3 Result Table with Trigger Output
+
+mysql> SELECT * FROM Result;
++----------+-------+-------+------+-----------+--------+
+| ResultID | Marks | Grade | GPA  | StudentID | ExamID |
++----------+-------+-------+------+-----------+--------+
+| 801      | 85    | A     | 8.5  | 101       | 701    |
+| 802      | 72    | B     | 7.2  | 102       | 702    |
+| 803      | 55    | F     | 5.5  | 103       | 703    |
++----------+-------+-------+------+-----------+--------+
+3 rows in set
+
+The Grade column is automatically assigned by the Assign_Grade trigger.
+
+
+7.2.4 Database Views
+
+mysql> SELECT * FROM Student_Result_View;
++-----------+--------------+--------------------+-------+-------+------+
+| StudentID | Student_Name | SubjectName        | Marks | Grade | GPA  |
++-----------+--------------+--------------------+-------+-------+------+
+| 101       | Rahul        | Database Systems   | 85    | A     | 8.5  |
+| 102       | Priya        | Operating Systems  | 72    | B     | 7.2  |
+| 103       | Aman         | Digital Electronics| 55    | F     | 5.5  |
++-----------+--------------+--------------------+-------+-------+------+
+
+mysql> SELECT * FROM Dept_Summary_View;
++----------+----------------+-------------+
+| DeptName | Total_Students | Average_GPA |
++----------+----------------+-------------+
+| CSE      | 2              | 7.85        |
+| ECE      | 2              | 5.50        |
++----------+----------------+-------------+
+
+
+7.2.5 Users Table (Authentication)
+
+mysql> SELECT UserID, Username, Role, RefID, FullName FROM Users;
++--------+----------+---------+-------+---------------------+
+| UserID | Username | Role    | RefID | FullName            |
++--------+----------+---------+-------+---------------------+
+| 1      | admin    | admin   | NULL  | Super Administrator |
+| 2      | rahul    | student | 101   | Rahul               |
+| 3      | priya    | student | 102   | Priya               |
+| 4      | aman     | student | 103   | Aman                |
+| 5      | sneha    | student | 104   | Sneha               |
+| 6      | drsingh  | faculty | 201   | Dr Singh            |
+| 7      | drverma  | faculty | 202   | Dr Verma            |
+| 8      | driyer   | faculty | 203   | Dr Iyer             |
++--------+----------+---------+-------+---------------------+
+8 rows in set
+
+
+7.3 Discussion
+--------------
+
+7.3.1 System Architecture
+
+The University ERP System follows a three-tier architecture:
+
+Tier 1 (Presentation Layer): React.js front-end served via Vite dev server
+on port 5173. Provides role-based dashboards with interactive charts,
+CRUD forms, and real-time data visualization.
+
+Tier 2 (Application Layer): Node.js + Express back-end running on port 5000.
+Handles authentication, REST API routing, business logic, and SQL query
+execution.
+
+Tier 3 (Data Layer): MySQL 8.0 database containing normalized tables,
+views, triggers, and stored procedures implementing all DBMS concepts
+from Chapters 1-5.
+
+
+7.3.2 Key Achievements
+
+1. Complete Database Implementation: All 9 tables with proper primary keys,
+   foreign keys, and referential integrity constraints were implemented as
+   designed in the ER model (Chapter 1).
+
+2. Complex Query Support: The SQL Console allows execution of all query types
+   demonstrated in Chapter 3 including aggregate functions, joins, subqueries,
+   views, and set operations.
+
+3. Normalization Verified: The database schema satisfies all normal forms
+   from 1NF through 5NF as analyzed in Chapter 4.
+
+4. Concurrency Control: The transaction mechanisms from Chapter 5 are
+   demonstrated through the marks management feature where multiple faculty
+   members can safely update student results.
+
+5. Trigger Automation: The Assign_Grade trigger automatically calculates
+   grades when marks are inserted, reducing manual effort and ensuring
+   consistency.
+
+6. Role-Based Access Control: Three distinct user interfaces ensure that
+   students can only view their own data, faculty can manage their subject
+   results, and administrators have full system control.
+
+7. Data Visualization: Interactive charts (bar, pie, radial) provide
+   immediate visual insights into enrollment patterns, grade distributions,
+   and department performance.
+
+
+7.3.3 Limitations and Future Scope
+
+Limitations:
+- Passwords are stored in plaintext (should use bcrypt hashing in production)
+- No JWT token-based session management
+- Limited to SELECT queries in SQL Console for safety
+
+Future Scope:
+- Add attendance tracking module
+- Implement email notifications for result publication
+- Add PDF report generation for student transcripts
+- Integrate with university payment systems for fee management
+- Deploy on cloud infrastructure (AWS/Azure) for scalability
+
+================================================================================
+                         END OF CHAPTERS 6 AND 7
+================================================================================

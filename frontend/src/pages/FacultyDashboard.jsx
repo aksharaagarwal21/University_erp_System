@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { User, BookOpen, Users, Calendar, Award, Pencil, Save, X, Plus, Trash2, DoorOpen, ClipboardList, FileText, CalendarOff, LogOut, ArrowLeft, GraduationCap } from 'lucide-react'
 
-const API = 'http://localhost:5000/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export default function FacultyDashboard({ user, toast, onLogout }) {
   const [profile, setProfile] = useState(null)

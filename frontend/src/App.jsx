@@ -23,7 +23,7 @@ import Results from './pages/Results'
 import Reports from './pages/Reports'
 import SqlConsole from './pages/SqlConsole'
 
-const API = 'http://localhost:5000/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 function useToast() {
   const [toasts, setToasts] = useState([])

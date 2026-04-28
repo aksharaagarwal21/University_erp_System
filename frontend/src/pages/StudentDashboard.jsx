@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { User, BookOpen, Award, Calendar, ClipboardList, TrendingUp, Star, Clock, DollarSign, Users, Megaphone, CheckCircle, LogOut } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, RadialBarChart, RadialBar } from 'recharts'
 
-const API = 'http://localhost:5000/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 const COLORS = ['#6366f1','#10b981','#f97316','#e11d48','#8b5cf6','#0ea5e9']
 
 export default function StudentDashboard({ user, onLogout }) {

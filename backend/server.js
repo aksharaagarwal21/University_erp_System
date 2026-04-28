@@ -7,8 +7,13 @@ app.use(cors());
 app.use(express.json());
 
 const pool = mysql.createPool({
-  host: 'localhost', user: 'root', password: 'Palak@123',
-  database: 'university_erpsystem', waitForConnections: true, connectionLimit: 10
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'Palak@123',
+  database: process.env.DB_NAME || 'university_erpsystem',
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true, connectionLimit: 10,
+  ssl: process.env.DB_HOST ? { rejectUnauthorized: false } : false
 });
 
 pool.getConnection().then(c => { console.log('✅ MySQL Connected'); c.release(); })
@@ -506,4 +511,5 @@ app.post('/api/component-marks/upsert', async (req, res) => {
   } catch(e) { res.status(500).json({error:e.message}); }
 });
 
-app.listen(5000, () => console.log('🚀 NexusEDU ERP API on http://localhost:5000'));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 NexusEDU ERP API on port ${PORT}`));

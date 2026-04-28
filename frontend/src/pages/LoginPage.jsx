@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { GraduationCap, Users, ShieldCheck, Eye, EyeOff, LogIn, UserPlus, ArrowLeft, Sparkles } from 'lucide-react'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const roles = [
   { id: 'student', label: 'Student', icon: Users, color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)' },
@@ -38,7 +39,7 @@ export default function LoginPage({ onLogin }) {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch(`${API}/auth/login`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })
       })
@@ -53,7 +54,7 @@ export default function LoginPage({ onLogin }) {
     e.preventDefault()
     setError(''); setSuccess(''); setLoading(true)
     try {
-      const res = await fetch('http://localhost:5000/api/auth/register', {
+      const res = await fetch(`${API}/auth/register`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           Username: username, Password: password, Role: role,

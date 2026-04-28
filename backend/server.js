@@ -11,9 +11,9 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'Palak@123',
   database: process.env.DB_NAME || 'university_erpsystem',
-  port: process.env.DB_PORT || 3306,
+  port: parseInt(process.env.DB_PORT || '3306'),
   waitForConnections: true, connectionLimit: 10,
-  ssl: process.env.DB_HOST ? { rejectUnauthorized: false } : false
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
 
 pool.getConnection().then(c => { console.log('✅ MySQL Connected'); c.release(); })

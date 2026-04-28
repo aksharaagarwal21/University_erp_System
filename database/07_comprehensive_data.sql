@@ -264,7 +264,7 @@ INSERT INTO Timetable VALUES
 ((@tid:=@tid+1),'Friday','15:00-16:00','A301',212,407);
 
 -- Auth users for new faculties
-INSERT IGNORE INTO users (Username,Password,Role,RefID,FullName,Email) VALUES
+INSERT IGNORE INTO Users (Username,Password,Role,RefID,FullName,Email) VALUES
 ('drsharma','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','faculty',204,'Dr Sharma','sharma@univ.edu'),
 ('drpatel','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','faculty',205,'Dr Patel','patel@univ.edu'),
 ('drnair','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','faculty',206,'Dr Nair','nair@univ.edu'),
@@ -274,7 +274,7 @@ INSERT IGNORE INTO users (Username,Password,Role,RefID,FullName,Email) VALUES
 ('drbose','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','faculty',210,'Dr Bose','bose@univ.edu');
 
 -- Auth users for some students
-INSERT IGNORE INTO users (Username,Password,Role,RefID,FullName,Email) VALUES
+INSERT IGNORE INTO Users (Username,Password,Role,RefID,FullName,Email) VALUES
 ('sneha','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','student',104,'Sneha','sneha@gmail.com'),
 ('vikram','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','student',105,'Vikram','vikram@gmail.com'),
 ('deepak','$2b$10$LQv3c1yqBo9SkvXS7QJBOeRFDJGFVAmjwSiDFPSml6h0vJYlY/H6i','student',121,'Deepak','deepak@gmail.com');
